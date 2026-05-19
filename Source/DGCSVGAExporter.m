@@ -1,0 +1,96 @@
+//
+//  DGCSVGAExporter.m
+//  DGCSVGAPlayer
+//
+//  Created by 崔明辉 on 2017/3/7.
+//  Copyright © 2017年 UED Center. All rights reserved.
+//
+
+#import "DGCSVGAExporter.h"
+#import "DGCSVGAVideoEntity.h"
+#import "DGCSVGAVideoSpriteEntity.h"
+#import "DGCSVGAVideoSpriteFrameEntity.h"
+#import "DGCSVGAContentLayer.h"
+#import "DGCSVGAVectorLayer.h"
+
+@interface DGCSVGAExporter ()
+
+@property (nonatomic, strong) CALayer *drawLayer;
+@property (nonatomic, assign) NSInteger currentFrame;
+
+@end
+
+@implementation DGCSVGAExporter
+
+- (NSArray<UIImage *> *)toImages {
+    NSMutableArray *images = [NSMutableArray array];
+    if (self.videoItem != nil && self.videoItem.videoSize.width > 0.0 && self.videoItem.videoSize.height > 0.0) {
+        [self draw];
+        for (NSInteger i = 0; i < self.videoItem.frames; i++) {
+            self.currentFrame = i;
+            [self update];
+            CGSize size = self.drawLayer.frame.size;
+            if (size.width > 0 && size.height > 0) {
+                UIGraphicsBeginImageContextWithOptions(size, NO, 1.0);
+                [self.drawLayer renderInContext:UIGraphicsGetCurrentContext()];
+                UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+                if (image != nil) {
+                    [images addObject:image];
+                }
+                UIGraphicsEndImageContext();
+            }
+        }
+    }
+    return [images copy];
+}
+
+- (void)saveImages:(NSString *)toPath filePrefix:(NSString *)filePrefix {
+    if (filePrefix == nil) {
+        filePrefix = @"";
+    }
+    [[NSFileManager defaultManager] createDirectoryAtPath:toPath withIntermediateDirectories:YES attributes:nil error:NULL];
+    if (self.videoItem != nil && self.videoItem.videoSize.width > 0.0 && self.videoItem.videoSize.height > 0.0) {
+        [self draw];
+        for (NSInteger i = 0; i < self.videoItem.frames; i++) {
+            self.currentFrame = i;
+            [self update];
+            
+            CGSize size = self.drawLayer.frame.size;
+            if (size.width > 0 && size.height > 0) {
+                UIGraphicsBeginImageContextWithOptions(size, NO, 1.0);
+                [self.drawLayer renderInContext:UIGraphicsGetCurrentContext()];
+                UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+                if (image != nil) {
+                    NSData *imageData = UIImagePNGRepresentation(image);
+                    if (imageData != nil) {
+                        [imageData writeToFile:[NSString stringWithFormat:@"%@/%@%ld.png", toPath, filePrefix, (long)i] atomically:YES];
+                    }
+                }
+                UIGraphicsEndImageContext();
+            }
+        }
+    }
+}
+
+- (void)draw {
+    self.drawLayer = [[CALayer alloc] init];
+    self.drawLayer.frame = CGRectMake(0, 0, self.videoItem.videoSize.width, self.videoItem.videoSize.height);
+    self.drawLayer.masksToBounds = true;
+    [self.videoItem.sprites enumerateObjectsUsingBlock:^(DGCSVGAVideoSpriteEntity * _Nonnull sprite, NSUInteger idx, BOOL * _Nonnull stop) {
+        UIImage *bitmap = self.videoItem.images[sprite.imageKey];;
+        DGCSVGAContentLayer *contentLayer = [sprite requestLayerWithBitmap:bitmap];
+        [self.drawLayer addSublayer:contentLayer];
+    }];
+    self.currentFrame = 0;
+    [self update];
+}
+
+- (void)update {
+    for (DGCSVGAContentLayer *layer in self.drawLayer.sublayers) {
+        if ([layer isKindOfClass:[DGCSVGAContentLayer class]]) {
+            [layer stepToFrame:self.currentFrame];
+        }
+    }
+}
+
+@end
